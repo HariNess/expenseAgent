@@ -187,3 +187,4 @@ All approvals happen in the background. Chat never freezes.
 ## 🏆 Built for NessAthon 2026
 
 Team: Vignesh Jayakumar · Atharva Bhagat · Hariharasudan Venkatasalam
+# expenseAgent
