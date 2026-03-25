@@ -1,0 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-canvas: #eef4fa;
+  --bg-primary: #f7fbff;
+  --bg-secondary: #edf4fb;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-input: #f2f7fc;
+  --bg-hover: #e3edf8;
+  --surface-raised: rgba(255, 255, 255, 0.96);
+  --surface-muted: #d9e8f4;
+  --border: rgba(3, 38, 71, 0.12);
+  --border-soft: rgba(3, 38, 71, 0.07);
+  --border-strong: rgba(1, 81, 133, 0.24);
+  --accent: #032647;
+  --accent-soft: #015185;
+  --accent-bright: #008de6;
+  --accent-hover: #021b31;
+  --accent-glow: rgba(0, 141, 230, 0.12);
+  --accent-green: #015185;
+  --accent-red: #c65151;
+  --accent-yellow: #0a6cae;
+  --text-primary: #0f2238;
+  --text-secondary: #4b6480;
+  --text-muted: #7f95ad;
+  --user-bubble: #032647;
+  --agent-bubble: rgba(255, 255, 255, 0.94);
+  --font-display: 'Manrope', sans-serif;
+  --font-body: 'Manrope', sans-serif;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --radius-lg: 30px;
+  --shadow-soft: 0 20px 45px rgba(3, 38, 71, 0.08);
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(3, 38, 71, 0.22);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(3, 38, 71, 0.32);
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13px;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.markdown-content th {
+  background: #e3effa;
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.markdown-content td {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  background: rgba(255, 252, 247, 0.82);
+}
+
+.markdown-content tr:nth-child(even) td {
+  background: rgba(239, 246, 254, 0.92);
+}
+
+.markdown-content strong {
+  color: var(--accent-hover);
+  font-weight: 700;
+}
+
+.markdown-content ul, .markdown-content ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.markdown-content li {
+  margin: 4px 0;
+  color: var(--text-secondary);
+}
+
+.markdown-content p {
+  margin: 7px 0;
+}
+
+.markdown-content code {
+  background: #e4effb;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--accent-hover);
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.92); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1024px) {
+  #root > div > div {
+    grid-template-columns: 1fr !important;
+  }
+}
