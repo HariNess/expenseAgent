@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 
-export default function FileUpload({ onFileSelect, disabled }) {
+export default function FileUpload({ onFileSelect, disabled, onFeedback }) {
   const inputRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -8,13 +8,14 @@ export default function FileUpload({ onFileSelect, disabled }) {
     if (!file) return
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
     if (!allowed.includes(file.type)) {
-      alert('Please upload a JPG, PNG, WEBP, or PDF file.')
+      onFeedback?.('Please upload a JPG, PNG, WEBP, or PDF file.', 'warning')
       return
     }
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be under 10MB.')
+      onFeedback?.('File size must be under 10MB.', 'warning')
       return
     }
+    onFeedback?.(`Selected ${file.name}.`, 'info')
     onFileSelect(file)
   }
 

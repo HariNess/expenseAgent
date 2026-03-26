@@ -24,14 +24,14 @@ def format_currency(amount: float) -> str:
 
 def get_approval_level(bill_amount: float) -> str:
     """Determine approval level based on amount"""
-    if bill_amount < 5000:
+    if bill_amount < SELF_APPROVAL_LIMIT:
         return "Self"
     return "Dual"
 
 
 def get_initial_approval_status(bill_amount: float) -> str:
     """Get initial approval status based on amount"""
-    if bill_amount < 5000:
+    if bill_amount < SELF_APPROVAL_LIMIT:
         return "Self-Approved"
     return "Awaiting Manager Approval"
 
@@ -66,3 +66,4 @@ def detect_media_type(filename: str) -> str:
         "pdf": "application/pdf",
     }
     return mapping.get(ext, "image/jpeg")
+SELF_APPROVAL_LIMIT = 100.0

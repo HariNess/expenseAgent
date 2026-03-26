@@ -3,7 +3,7 @@ Extraction Agent
 Responsible for extracting structured data from invoice images using Claude Vision
 """
 import io
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 from backend.services.claude_service import extract_invoice_with_vision
 from backend.utils.helpers import detect_media_type
 
@@ -21,22 +21,41 @@ def process_invoice_file(file_bytes: bytes, filename: str) -> dict:
 
     # Validate image can be opened
     try:
-        img = Image.open(io.BytesIO(file_bytes))
-        # Resize if too large (Claude has limits)
-        if img.width > 2000 or img.height > 2000:
-            img.thumbnail((2000, 2000), Image.LANCZOS)
-            output = io.BytesIO()
-            if img.mode in ("RGBA", "LA", "P"):
-                img = img.convert("RGB")
-            img.save(output, format="JPEG")
-            file_bytes = output.getvalue()
-            media_type = "image/jpeg"
+        normalized_bytes, media_type = prepare_image_bytes(file_bytes, media_type)
     except Exception as e:
         raise ValueError(f"Could not process image: {str(e)}")
 
-    # Call Claude Vision
-    extracted = extract_invoice_with_vision(file_bytes, media_type)
-    return extracted
+    attempts = [
+        (
+            normalized_bytes,
+            "Primary pass. Read the invoice exactly as shown and avoid leaving visible fields blank.",
+        )
+    ]
+
+    try:
+        enhanced_bytes = build_enhanced_variant(normalized_bytes)
+        attempts.append(
+            (
+                enhanced_bytes,
+                "Retry on an enhanced invoice image. Focus on the vendor header, invoice number, invoice date, total amount, and GST values.",
+            )
+        )
+    except Exception:
+        pass
+
+    best_result = None
+    best_score = -1
+
+    for candidate_bytes, hint in attempts:
+        extracted = extract_invoice_with_vision(candidate_bytes, media_type, hint)
+        score = extraction_score(extracted)
+        if score > best_score:
+            best_result = extracted
+            best_score = score
+        if score >= 4:
+            break
+
+    return best_result or {}
 
 
 def convert_pdf_to_image(pdf_bytes: bytes) -> tuple:
@@ -77,6 +96,62 @@ def convert_pdf_to_image(pdf_bytes: bytes) -> tuple:
         return output.getvalue(), "image/jpeg"
     except Exception as e:
         raise ValueError(f"Could not convert PDF: {str(e)}")
+
+
+def prepare_image_bytes(file_bytes: bytes, media_type: str) -> tuple[bytes, str]:
+    """Normalize invoice images to a high-quality RGB JPEG for OCR-style extraction."""
+    img = Image.open(io.BytesIO(file_bytes))
+    if img.mode in ("RGBA", "LA", "P"):
+        img = img.convert("RGB")
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    # Upscale small mobile captures a bit; downscale overly large images.
+    max_dim = max(img.width, img.height)
+    if max_dim < 1400:
+        scale = 1400 / max_dim
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+    elif max_dim > 2200:
+        img.thumbnail((2200, 2200), Image.LANCZOS)
+
+    output = io.BytesIO()
+    img.save(output, format="JPEG", quality=95, optimize=True)
+    return output.getvalue(), "image/jpeg"
+
+
+def build_enhanced_variant(file_bytes: bytes) -> bytes:
+    """Create a higher-contrast variant that helps OCR-heavy receipts and invoices."""
+    img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+    img = ImageOps.autocontrast(img)
+    img = ImageEnhance.Contrast(img).enhance(1.35)
+    img = ImageEnhance.Sharpness(img).enhance(1.25)
+
+    output = io.BytesIO()
+    img.save(output, format="JPEG", quality=95, optimize=True)
+    return output.getvalue()
+
+
+def extraction_score(extracted: dict) -> int:
+    """Score extraction completeness so we can prefer the best retry result."""
+    score = 0
+    if extracted.get("vendor_name"):
+        score += 1
+    if extracted.get("invoice_number"):
+        score += 1
+    if extracted.get("invoice_date"):
+        score += 1
+    if extracted.get("bill_amount") not in (None, "", 0, 0.0):
+        score += 2
+    if extracted.get("gst_number"):
+        score += 1
+    if extracted.get("expense_category"):
+        score += 1
+    return score
+
+
+def extraction_is_meaningful(extracted: dict) -> bool:
+    """Detect when the AI effectively failed to read the invoice."""
+    return extraction_score(extracted) >= 2
 
 
 def validate_extracted_data(extracted: dict) -> dict:

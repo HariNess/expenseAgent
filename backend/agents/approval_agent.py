@@ -4,11 +4,11 @@ Handles expense approval routing, status updates, and notifications
 """
 from sqlalchemy.orm import Session
 from backend.models.database import Expense, ApprovalLog, Employee
-from backend.utils.helpers import get_today_str, format_currency
+from backend.utils.helpers import get_today_str, format_currency, SELF_APPROVAL_LIMIT
 
 
 def process_self_approval(db: Session, expense: Expense) -> dict:
-    """Handle self-approval for expenses below ₹5,000"""
+    """Handle self-approval for expenses below the self-approval limit."""
     expense.approval_status = "Self-Approved"
 
     log = ApprovalLog(
@@ -17,7 +17,7 @@ def process_self_approval(db: Session, expense: Expense) -> dict:
         action_by=expense.employee_email,
         action_type="Auto-Approved",
         action_date=get_today_str(),
-        comments="Auto-approved as amount is below ₹5,000",
+        comments=f"Auto-approved as amount is below ₹{SELF_APPROVAL_LIMIT:,.0f}",
         approval_stage="Self",
         bill_amount=expense.bill_amount,
         vendor_name=expense.vendor_name
@@ -28,7 +28,7 @@ def process_self_approval(db: Session, expense: Expense) -> dict:
     return {
         "status": "Self-Approved",
         "message": f"✅ Your expense **{expense.expense_id}** has been automatically approved!\n\n"
-                   f"Since the amount is below ₹5,000, no further approval is needed.\n\n"
+                   f"Since the amount is below ₹{SELF_APPROVAL_LIMIT:,.0f}, no further approval is needed.\n\n"
                    f"**Amount:** {format_currency(expense.bill_amount)}\n"
                    f"**Vendor:** {expense.vendor_name}\n"
                    f"**Reference:** {expense.expense_id}"
@@ -130,7 +130,7 @@ def get_expense_status_message(expense: Expense) -> str:
     """Generate human-readable status message"""
     status_map = {
         "Pending": "⏳ Your expense is being processed.",
-        "Self-Approved": f"✅ Auto-approved (amount below ₹5,000).",
+        "Self-Approved": f"✅ Auto-approved (amount below ₹{SELF_APPROVAL_LIMIT:,.0f}).",
         "Awaiting Manager Approval": "⏳ Waiting for your manager to approve.",
         "Awaiting HR Approval": "⏳ Manager approved! Waiting for HR approval.",
         "Fully Approved": "🎉 Fully approved by Manager and HR!",

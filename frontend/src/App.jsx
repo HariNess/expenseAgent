@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import ChatWindow from './components/ChatWindow'
 import ApprovalPanel from './components/ApprovalPanel'
+import FeedbackToast from './components/FeedbackToast'
 import nessLogo from './assets/ness.png'
+import { getMyExpenses, getPendingApprovals } from './utils/api'
 
 const DEMO_USERS = [
   {
@@ -46,12 +48,16 @@ function getRoleDepartmentText(user) {
 
 const DEFAULT_USER = DEMO_USERS[0]
 const LOGIN_STORAGE_KEY = 'ness-expense-user'
+const NOTIFICATION_DISMISS_PREFIX = 'ness-expense-notice'
 
 export default function App() {
   const [activeUser, setActiveUser] = useState(DEFAULT_USER)
   const [activeTab, setActiveTab] = useState('chat')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedEmail, setSelectedEmail] = useState(DEFAULT_USER.email)
+  const [loginNotification, setLoginNotification] = useState(null)
+  const [navBadges, setNavBadges] = useState({})
+  const [feedbackToasts, setFeedbackToasts] = useState([])
 
   useEffect(() => {
     const storedEmail = window.localStorage.getItem(LOGIN_STORAGE_KEY)
@@ -63,6 +69,84 @@ export default function App() {
       setIsAuthenticated(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated || activeUser.role !== 'employee') {
+      setLoginNotification(null)
+      return
+    }
+
+    let isMounted = true
+
+    getMyExpenses(activeUser.email)
+      .then((data) => {
+        if (!isMounted) return
+
+        const latestExpense = (data.expenses || [])[0]
+        const notification = buildLoginNotification(activeUser, latestExpense)
+
+        if (!notification) {
+          setLoginNotification(null)
+          return
+        }
+
+        const dismissalKey = getNotificationDismissKey(activeUser.email, notification.expenseId, notification.status)
+        const isDismissed = window.localStorage.getItem(dismissalKey) === 'dismissed'
+        setLoginNotification(isDismissed ? null : notification)
+      })
+      .catch(() => {
+        if (isMounted) setLoginNotification(null)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isAuthenticated, activeUser])
+
+  useEffect(() => {
+    setNavBadges((prev) => ({
+      ...prev,
+      chat: loginNotification ? 1 : 0,
+    }))
+  }, [loginNotification])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setNavBadges({})
+      return
+    }
+
+    if (activeUser.role === 'employee') {
+      setNavBadges((prev) => ({ ...prev, approvals: 0 }))
+      return
+    }
+
+    let isMounted = true
+    const stage = activeUser.role === 'hr' ? 'hr' : 'manager'
+
+    const loadPendingCount = () => {
+      getPendingApprovals(activeUser.email, stage)
+        .then((data) => {
+          if (!isMounted) return
+          setNavBadges((prev) => ({
+            ...prev,
+            approvals: (data.pending || []).length,
+          }))
+        })
+        .catch(() => {
+          if (!isMounted) return
+          setNavBadges((prev) => ({ ...prev, approvals: 0 }))
+        })
+    }
+
+    loadPendingCount()
+    const intervalId = window.setInterval(loadPendingCount, 15000)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [isAuthenticated, activeUser])
 
   const handleLogin = () => {
     const matchedUser =
@@ -86,7 +170,30 @@ export default function App() {
     setIsAuthenticated(false)
     setSelectedEmail(activeUser.email)
     setActiveTab('chat')
+    setLoginNotification(null)
     window.localStorage.removeItem(LOGIN_STORAGE_KEY)
+  }
+
+  const handleDismissNotification = () => {
+    if (!loginNotification) return
+
+    window.localStorage.setItem(
+      getNotificationDismissKey(activeUser.email, loginNotification.expenseId, loginNotification.status),
+      'dismissed'
+    )
+    setLoginNotification(null)
+  }
+
+  const pushFeedback = (message, tone = 'info') => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    setFeedbackToasts((prev) => [...prev, { id, message, tone }])
+    window.setTimeout(() => {
+      setFeedbackToasts((prev) => prev.filter((toast) => toast.id !== id))
+    }, 3600)
+  }
+
+  const dismissFeedback = (id) => {
+    setFeedbackToasts((prev) => prev.filter((toast) => toast.id !== id))
   }
 
   if (!isAuthenticated) {
@@ -108,8 +215,27 @@ export default function App() {
         background:
           'radial-gradient(circle at top left, rgba(0, 141, 230, 0.18), transparent 26%), radial-gradient(circle at bottom right, rgba(1, 81, 133, 0.1), transparent 30%), var(--bg-canvas)',
         color: 'var(--text-primary)',
+        position: 'relative',
       }}
     >
+      <div
+        style={{
+          position: 'fixed',
+          top: 18,
+          right: 18,
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          pointerEvents: 'none',
+        }}
+      >
+        {feedbackToasts.map((toast) => (
+          <div key={toast.id} style={{ pointerEvents: 'auto' }}>
+            <FeedbackToast toast={toast} onDismiss={dismissFeedback} />
+          </div>
+        ))}
+      </div>
       <div
         style={{
           display: 'grid',
@@ -135,6 +261,7 @@ export default function App() {
           <nav style={{ display: 'grid', gap: 10 }}>
             {NAV_ITEMS.map((item) => {
               const isActive = activeTab === item.id
+              const badgeCount = navBadges[item.id] || 0
 
               return (
                 <button
@@ -155,13 +282,46 @@ export default function App() {
                 >
                   <div
                     style={{
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 700,
-                      fontSize: 16,
-                      color: 'var(--text-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
                     }}
                   >
-                    {item.label}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontWeight: 700,
+                        fontSize: 16,
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                    {badgeCount > 0 && (
+                      <span
+                        style={{
+                          minWidth: 28,
+                          height: 28,
+                          padding: '0 9px',
+                          borderRadius: 999,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: isActive
+                            ? 'linear-gradient(135deg, var(--accent), var(--accent-bright))'
+                            : 'rgba(0, 141, 230, 0.12)',
+                          color: isActive ? '#fff' : 'var(--accent)',
+                          fontSize: 12,
+                          fontWeight: 800,
+                          letterSpacing: '0.02em',
+                          boxShadow: isActive ? '0 10px 20px rgba(3, 38, 71, 0.16)' : 'none',
+                          flexShrink: 0,
+                        }}
+                      >
+                        +{badgeCount}
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{
@@ -383,6 +543,8 @@ export default function App() {
               marginTop: 18,
               flex: 1,
               minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
               border: '1px solid var(--border)',
               borderRadius: 30,
               background: 'rgba(255, 255, 255, 0.84)',
@@ -390,15 +552,35 @@ export default function App() {
               overflow: 'hidden',
             }}
           >
-            {activeTab === 'chat' && (
-              <ChatWindow key={activeUser.email} employeeEmail={activeUser.email} />
+            {loginNotification && (
+              <LoginNotificationBanner
+                notification={loginNotification}
+                onDismiss={handleDismissNotification}
+              />
             )}
-            {activeTab === 'approvals' && (
-              <div style={{ height: '100%', overflowY: 'auto' }}>
-                <ApprovalPanel approverEmail={activeUser.email} stage={approvalStage} />
+            {activeTab === 'chat' && (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <ChatWindow
+                  key={activeUser.email}
+                  employeeEmail={activeUser.email}
+                  onActionFeedback={pushFeedback}
+                />
               </div>
             )}
-            {activeTab === 'history' && <HistoryTab email={activeUser.email} />}
+            {activeTab === 'approvals' && (
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                <ApprovalPanel
+                  approverEmail={activeUser.email}
+                  stage={approvalStage}
+                  onActionFeedback={pushFeedback}
+                />
+              </div>
+            )}
+            {activeTab === 'history' && (
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                <HistoryTab email={activeUser.email} />
+              </div>
+            )}
           </section>
         </main>
       </div>
@@ -472,30 +654,7 @@ function LoginScreen({ selectedEmail, setSelectedEmail, onLogin }) {
             >
               NessExpense
             </div>
-            <h1
-              style={{
-                marginTop: 16,
-                fontFamily: 'var(--font-display)',
-                fontSize: 44,
-                lineHeight: 1.05,
-              fontWeight: 800,
-              maxWidth: 420,
-            }}
-          >
-              Expense operations with consistent Ness branding.
-            </h1>
-            <p
-              style={{
-                marginTop: 18,
-                maxWidth: 470,
-                color: 'rgba(255,255,255,0.82)',
-                fontSize: 15,
-                lineHeight: 1.7,
-              }}
-            >
-            Choose a profile to enter the workspace, review invoices, route approvals,
-            and move through the same role-based experience from a proper, branded login flow.
-            </p>
+            <div style={{ marginTop: 16, maxWidth: 420 }} />
           </div>
 
           <div
@@ -707,6 +866,140 @@ function LoginMetric({ label, value }) {
       <div style={{ marginTop: 6, fontSize: 22, fontWeight: 800 }}>
         {value}
       </div>
+    </div>
+  )
+}
+
+function getNotificationDismissKey(email, expenseId, status) {
+  return `${NOTIFICATION_DISMISS_PREFIX}:${email}:${expenseId}:${status}`
+}
+
+function buildLoginNotification(user, expense) {
+  if (!expense) return null
+
+  if (expense.status === 'Awaiting HR Approval') {
+    return {
+      tone: 'info',
+      title: 'Manager approval received',
+      body: `Your expense ${expense.expense_id} for ${expense.bill_amount} has been approved by your manager and is now waiting for HR review.`,
+      expenseId: expense.expense_id,
+      status: expense.status,
+    }
+  }
+
+  if (expense.status === 'Fully Approved') {
+    return {
+      tone: 'success',
+      title: 'Expense fully approved',
+      body: `Your expense ${expense.expense_id} has completed the approval workflow.`,
+      expenseId: expense.expense_id,
+      status: expense.status,
+    }
+  }
+
+  if (expense.status === 'Rejected') {
+    return {
+      tone: 'warning',
+      title: 'Expense update available',
+      body: `Your expense ${expense.expense_id} was rejected. Open the archive or chat history to review the latest outcome.`,
+      expenseId: expense.expense_id,
+      status: expense.status,
+    }
+  }
+
+  if (expense.status === 'Self-Approved') {
+    return {
+      tone: 'success',
+      title: 'Expense auto-approved',
+      body: `Your expense ${expense.expense_id} was automatically approved under the self-approval threshold.`,
+      expenseId: expense.expense_id,
+      status: expense.status,
+    }
+  }
+
+  return null
+}
+
+function LoginNotificationBanner({ notification, onDismiss }) {
+  const toneStyles = {
+    info: {
+      background: 'linear-gradient(90deg, rgba(0, 141, 230, 0.1), rgba(1, 81, 133, 0.08))',
+      border: '1px solid rgba(0, 141, 230, 0.22)',
+      accent: 'var(--accent)',
+    },
+    success: {
+      background: 'linear-gradient(90deg, rgba(38, 120, 91, 0.1), rgba(38, 120, 91, 0.06))',
+      border: '1px solid rgba(38, 120, 91, 0.18)',
+      accent: '#26785b',
+    },
+    warning: {
+      background: 'linear-gradient(90deg, rgba(209, 138, 38, 0.12), rgba(209, 138, 38, 0.06))',
+      border: '1px solid rgba(209, 138, 38, 0.24)',
+      accent: '#a56b17',
+    },
+  }
+
+  const styles = toneStyles[notification.tone] || toneStyles.info
+
+  return (
+    <div
+      style={{
+        padding: '16px 22px',
+        background: styles.background,
+        borderBottom: styles.border,
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          marginTop: 6,
+          background: styles.accent,
+          flexShrink: 0,
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            fontSize: 15,
+            color: 'var(--text-primary)',
+          }}
+        >
+          {notification.title}
+        </div>
+        <div
+          style={{
+            marginTop: 4,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.55,
+          }}
+        >
+          {notification.body}
+        </div>
+      </div>
+      <button
+        onClick={onDismiss}
+        style={{
+          border: '1px solid var(--border)',
+          background: 'rgba(255,255,255,0.72)',
+          color: 'var(--text-secondary)',
+          borderRadius: 999,
+          padding: '8px 12px',
+          cursor: 'pointer',
+          fontWeight: 700,
+          fontSize: 12,
+          flexShrink: 0,
+        }}
+      >
+        Dismiss
+      </button>
     </div>
   )
 }

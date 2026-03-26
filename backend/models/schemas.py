@@ -67,6 +67,13 @@ class ApprovalAction(BaseModel):
     stage: str  # "manager" or "hr"
 
 
+class ClearApprovedExpensesResponse(BaseModel):
+    deleted_expenses: int
+    deleted_logs: int
+    statuses_cleared: List[str]
+    message: str
+
+
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str

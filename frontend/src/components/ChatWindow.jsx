@@ -10,7 +10,7 @@ const QUICK_ACTIONS = [
   { label: 'Get Help', action: 'help' },
 ]
 
-export default function ChatWindow({ employeeEmail }) {
+export default function ChatWindow({ employeeEmail, onActionFeedback }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -51,6 +51,7 @@ export default function ChatWindow({ employeeEmail }) {
 
   const handleFileUpload = async (file) => {
     addMessage('user', file.name, { type: 'file' })
+    onActionFeedback?.(`Uploading ${file.name}...`, 'info')
     setIsTyping(true)
 
     try {
@@ -59,14 +60,18 @@ export default function ChatWindow({ employeeEmail }) {
       if (data.status === 'fraud_detected') {
         addMessage('assistant', data.message)
         setPendingExpense(null)
+        onActionFeedback?.('Invoice flagged for review. Please check the guidance in chat.', 'warning')
       } else if (data.status === 'extracted') {
         addMessage('assistant', data.message)
         setPendingExpense(data.extracted_data)
+        onActionFeedback?.('Invoice details extracted. Review the fields before submitting.', 'success')
       } else {
         addMessage('assistant', data.message || "Something went wrong processing your document.")
+        onActionFeedback?.(data.message || 'Document processing did not complete.', 'warning')
       }
     } catch (e) {
       addMessage('assistant', "I had trouble reading that document. Please try uploading a clearer image.")
+      onActionFeedback?.('Upload failed. Please try a clearer invoice image or PDF.', 'error')
     } finally {
       setIsTyping(false)
     }
@@ -78,8 +83,10 @@ export default function ChatWindow({ employeeEmail }) {
       if (data.extracted_data) {
         setPendingExpense(data.extracted_data)
       }
+      onActionFeedback?.(`${field.replace(/_/g, ' ')} updated.`, 'success')
     } catch (e) {
       console.error(e)
+      onActionFeedback?.('Could not update that field right now.', 'error')
     }
   }
 
@@ -89,8 +96,10 @@ export default function ChatWindow({ employeeEmail }) {
     try {
       const data = await submitExpense(employeeEmail, sessionId)
       addMessage('assistant', data.message)
+      onActionFeedback?.(`Expense ${data.expense_id} submitted successfully.`, 'success')
     } catch (e) {
       addMessage('assistant', "There was an issue submitting your expense. Please try again.")
+      onActionFeedback?.('Expense submission failed. Please try again.', 'error')
     } finally {
       setIsTyping(false)
     }
@@ -99,6 +108,7 @@ export default function ChatWindow({ employeeEmail }) {
   const handleExpenseCancel = () => {
     setPendingExpense(null)
     addMessage('assistant', "No problem! The expense has been cancelled. Upload a new document whenever you're ready.")
+    onActionFeedback?.('Draft expense cancelled.', 'info')
   }
 
   const handleKeyDown = (e) => {
@@ -113,11 +123,13 @@ export default function ChatWindow({ employeeEmail }) {
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
+      minHeight: 0,
       position: 'relative',
     }}>
       {/* Messages area */}
       <div style={{
         flex: 1,
+        minHeight: 0,
         overflowY: 'auto',
         padding: '26px 28px',
         display: 'flex',
@@ -264,7 +276,11 @@ export default function ChatWindow({ employeeEmail }) {
           />
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', paddingBottom: 2 }}>
-            <FileUpload onFileSelect={handleFileUpload} disabled={isTyping} />
+            <FileUpload
+              onFileSelect={handleFileUpload}
+              disabled={isTyping}
+              onFeedback={onActionFeedback}
+            />
 
             <button
               onClick={() => handleSend()}

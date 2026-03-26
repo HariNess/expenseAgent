@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.models.database import get_db, Expense, ApprovalLog
-from backend.models.schemas import ApprovalAction
+from backend.models.schemas import ApprovalAction, ClearApprovedExpensesResponse
 from backend.agents.approval_agent import (
     process_manager_approval,
     process_hr_approval,
@@ -10,6 +10,8 @@ from backend.agents.approval_agent import (
 from backend.utils.helpers import format_currency
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
+
+APPROVED_STATUSES = ["Self-Approved", "Fully Approved"]
 
 
 @router.get("/pending/{approver_email}")
@@ -22,6 +24,7 @@ async def get_pending(approver_email: str, stage: str = "manager", db: Session =
                 "expense_id": e.expense_id,
                 "employee_email": e.employee_email,
                 "vendor_name": e.vendor_name,
+                "invoice_number": e.invoice_number,
                 "bill_amount": format_currency(e.bill_amount),
                 "bill_amount_raw": e.bill_amount,
                 "invoice_date": e.invoice_date,
@@ -58,6 +61,42 @@ async def take_approval_action(action: ApprovalAction, db: Session = Depends(get
         raise HTTPException(status_code=400, detail="Invalid stage. Use 'manager' or 'hr'")
 
     return result
+
+
+@router.post("/clear-approved", response_model=ClearApprovedExpensesResponse)
+async def clear_approved_expenses(db: Session = Depends(get_db)):
+    """Delete approved expenses and their approval logs."""
+    approved_expense_ids = [
+        expense_id
+        for (expense_id,) in db.query(Expense.expense_id).filter(
+            Expense.approval_status.in_(APPROVED_STATUSES)
+        ).all()
+    ]
+
+    if not approved_expense_ids:
+        return ClearApprovedExpensesResponse(
+            deleted_expenses=0,
+            deleted_logs=0,
+            statuses_cleared=APPROVED_STATUSES,
+            message="No approved expenses were found to clear."
+        )
+
+    deleted_logs = db.query(ApprovalLog).filter(
+        ApprovalLog.expense_id.in_(approved_expense_ids)
+    ).delete(synchronize_session=False)
+
+    deleted_expenses = db.query(Expense).filter(
+        Expense.expense_id.in_(approved_expense_ids)
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+    return ClearApprovedExpensesResponse(
+        deleted_expenses=deleted_expenses,
+        deleted_logs=deleted_logs,
+        statuses_cleared=APPROVED_STATUSES,
+        message="Approved expenses cleared successfully."
+    )
 
 
 @router.get("/expense/{expense_id}/logs")

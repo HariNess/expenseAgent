@@ -2,11 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import Optional
 import json
+import re
 
 from backend.models.database import get_db, Expense, Employee
 from backend.models.schemas import ChatRequest, ChatResponse
 from backend.agents.orchestrator import get_orchestrator_response, parse_edit_intent
-from backend.agents.extraction_agent import process_invoice_file, validate_extracted_data
+from backend.agents.extraction_agent import (
+    process_invoice_file,
+    validate_extracted_data,
+    extraction_is_meaningful,
+)
 from backend.agents.fraud_agent import run_fraud_detection, format_fraud_message
 from backend.agents.approval_agent import process_self_approval, get_expense_status_message
 from backend.utils.helpers import (
@@ -18,6 +23,36 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # In-memory session store (use Redis in production)
 sessions: dict = {}
+EXPENSE_ID_PATTERN = re.compile(r"\bEXP-\d{8}-[A-Za-z0-9]+\b", re.IGNORECASE)
+STATUS_KEYWORDS = ("status", "track", "tracking", "approval", "approved", "pending", "where is")
+
+
+def _extract_expense_id(text: str) -> Optional[str]:
+    match = EXPENSE_ID_PATTERN.search(text or "")
+    return match.group(0) if match else None
+
+
+def _is_status_lookup(message: str) -> bool:
+    lowered = (message or "").lower()
+    return any(keyword in lowered for keyword in STATUS_KEYWORDS) or bool(_extract_expense_id(message))
+
+
+def _build_status_chat_reply(expense: Expense) -> str:
+    status_message = get_expense_status_message(expense)
+    lines = [
+        f"Reference ID: {expense.expense_id}",
+        f"Status: {expense.approval_status}",
+        status_message,
+    ]
+
+    if expense.approval_status == "Awaiting HR Approval":
+        lines.append("Your manager has already approved this expense. It is now waiting for HR review.")
+    elif expense.approval_status == "Awaiting Manager Approval":
+        lines.append("This expense is currently waiting for manager review.")
+    elif expense.approval_status == "Fully Approved":
+        lines.append("This reimbursement has completed the approval workflow.")
+
+    return "\n\n".join(lines)
 
 
 @router.post("/message")
@@ -33,6 +68,33 @@ async def chat_message(request: ChatRequest, db: Session = Depends(get_db)):
 
     session = sessions[session_id]
     history = session["history"]
+
+    if _is_status_lookup(request.message):
+        expense_id = _extract_expense_id(request.message)
+        expense = None
+
+        if expense_id:
+            expense = db.query(Expense).filter(
+                Expense.expense_id == expense_id,
+                Expense.employee_email == request.employee_email
+            ).first()
+        else:
+            expense = db.query(Expense).filter(
+                Expense.employee_email == request.employee_email
+            ).order_by(Expense.created_at.desc()).first()
+
+        if expense:
+            response_text = _build_status_chat_reply(expense)
+            history.append({"role": "user", "content": request.message})
+            history.append({"role": "assistant", "content": response_text})
+            if len(history) > 20:
+                history = history[-20:]
+            sessions[session_id]["history"] = history
+
+            return ChatResponse(
+                message=response_text,
+                session_id=session_id
+            )
 
     # Get orchestrator response
     response_text = get_orchestrator_response(
@@ -81,6 +143,13 @@ async def upload_invoice(
         # Step 1: Extract invoice data using Claude Vision
         raw_extracted = process_invoice_file(file_bytes, filename)
         extracted = validate_extracted_data(raw_extracted)
+
+        if not extraction_is_meaningful(extracted):
+            return {
+                "status": "error",
+                "message": "I couldn't reliably read the invoice details from that document. Please try a clearer image or a higher-quality PDF where the invoice number, date, vendor name, and total amount are visible.",
+                "session_id": session_id
+            }
 
         # Step 2: Run fraud detection
         existing_invoices = db.query(Expense).filter(

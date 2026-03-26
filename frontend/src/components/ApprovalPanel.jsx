@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { getPendingApprovals, takeApprovalAction } from '../utils/api'
 
-export default function ApprovalPanel({ approverEmail, stage }) {
+export default function ApprovalPanel({ approverEmail, stage, onActionFeedback }) {
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(null)
@@ -9,16 +9,22 @@ export default function ApprovalPanel({ approverEmail, stage }) {
   const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
-    fetchPending()
+    fetchPending(true)
   }, [approverEmail, stage])
 
-  const fetchPending = async () => {
+  const fetchPending = async (silent = false) => {
     setLoading(true)
     try {
       const data = await getPendingApprovals(approverEmail, stage)
       setPending(data.pending || [])
+      if (!silent) {
+        onActionFeedback?.('Approval queue refreshed.', 'info')
+      }
     } catch (e) {
       console.error(e)
+      if (!silent) {
+        onActionFeedback?.('Could not refresh the approval queue.', 'error')
+      }
     } finally {
       setLoading(false)
     }
@@ -26,12 +32,12 @@ export default function ApprovalPanel({ approverEmail, stage }) {
 
   const handleAction = async (expenseId, action) => {
     if (action === 'reject' && !comments[expenseId]?.trim()) {
-      alert('Please provide a reason for rejection.')
+      onActionFeedback?.('Please provide a reason before rejecting this expense.', 'warning')
       return
     }
     setProcessing(expenseId)
     try {
-      await takeApprovalAction(
+      const result = await takeApprovalAction(
         expenseId,
         action,
         comments[expenseId] || '',
@@ -39,8 +45,13 @@ export default function ApprovalPanel({ approverEmail, stage }) {
         stage
       )
       setPending(prev => prev.filter(e => e.expense_id !== expenseId))
+      setExpanded((current) => (current === expenseId ? null : current))
+      onActionFeedback?.(
+        result.message || `Expense ${expenseId} ${action === 'approve' ? 'approved' : 'rejected'}.`,
+        action === 'approve' ? 'success' : 'warning'
+      )
     } catch (e) {
-      alert('Action failed. Please try again.')
+      onActionFeedback?.('Action failed. Please try again.', 'error')
     } finally {
       setProcessing(null)
     }
@@ -76,7 +87,7 @@ export default function ApprovalPanel({ approverEmail, stage }) {
           </p>
         </div>
         <button
-          onClick={fetchPending}
+          onClick={() => fetchPending(false)}
           style={{
             padding: '8px 14px', borderRadius: 8,
             border: '1px solid var(--border)', background: 'rgba(255,255,255,0.45)',

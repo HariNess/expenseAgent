@@ -53,13 +53,17 @@ def _parse_json_response(response) -> dict:
     raise ValueError("Model returned an empty response")
 
 
-def extract_invoice_with_vision(image_bytes: bytes, media_type: str = "image/jpeg") -> dict:
+def extract_invoice_with_vision(
+    image_bytes: bytes,
+    media_type: str = "image/jpeg",
+    extraction_hint: str = ""
+) -> dict:
     """
     Send invoice image to OpenAI Vision and extract structured data.
     """
     image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
 
-    prompt = """You are an expert invoice parser.
+    prompt = f"""You are an expert invoice parser.
 
 Extract these fields from the invoice image:
 - vendor_name: Name of the vendor or supplier
@@ -73,7 +77,14 @@ Extract these fields from the invoice image:
   Food & Meals, Office Supplies, Client Entertainment, Medical Reimbursement,
   Training & Courses, Miscellaneous
 
-If a field is not found, use empty string for text fields and 0 for numeric fields."""
+Important:
+- Read the document carefully before leaving fields blank.
+- Prioritize the printed invoice total, invoice number, vendor name, invoice date, and GST details.
+- If the image is a photographed bill, infer the most likely vendor name from the header.
+- Return empty strings or 0 only when the field is truly not visible.
+
+Additional guidance for this attempt:
+{extraction_hint or "No extra guidance."}"""
 
     response = client.chat.completions.create(
         model=MODEL,
@@ -85,7 +96,8 @@ If a field is not found, use empty string for text fields and 0 for numeric fiel
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:{media_type};base64,{image_b64}"
+                            "url": f"data:{media_type};base64,{image_b64}",
+                            "detail": "high",
                         },
                     },
                 ],

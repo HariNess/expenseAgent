@@ -28,5 +28,4 @@ mkdir -p database
 # Start server
 echo "✅ Starting FastAPI server on http://localhost:8081"
 echo "📖 API docs at http://localhost:8081/docs"
-cd backend
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8081
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8081
