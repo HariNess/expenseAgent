@@ -9,7 +9,8 @@ from backend.services.claude_service import analyze_fraud_with_ai
 def run_fraud_detection(
     invoice_data: dict,
     existing_invoices: list,
-    use_ai: bool = True
+    use_ai: bool = True,
+    include_external_gst_check: bool = False,
 ) -> dict:
     """
     Run complete fraud detection pipeline.
@@ -19,7 +20,11 @@ def run_fraud_detection(
     """
 
     # Step 1: Rule-based checks
-    rule_result = run_all_fraud_checks(invoice_data, existing_invoices)
+    rule_result = run_all_fraud_checks(
+        invoice_data,
+        existing_invoices,
+        include_external_gst_check=include_external_gst_check,
+    )
 
     # If rule checks already flagged — return immediately, no need for AI
     if rule_result["is_fraudulent"]:

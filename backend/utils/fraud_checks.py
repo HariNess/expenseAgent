@@ -91,7 +91,8 @@ def check_bill_amount_valid(bill_amount: float) -> Tuple[bool, str]:
 
 def run_all_fraud_checks(
     invoice_data: dict,
-    existing_invoices: list
+    existing_invoices: list,
+    include_external_gst_check: bool = False,
 ) -> dict:
     """
     Run all 4 fraud checks and return combined result
@@ -126,11 +127,12 @@ def run_all_fraud_checks(
         is_fraudulent = True
         fraud_reasons.append(reason)
 
-    # Check 5: GST active status
-    inactive_gst, reason = check_gst_number_active(invoice_data.get("gst_number", ""))
-    if inactive_gst:
-        is_fraudulent = True
-        fraud_reasons.append(reason)
+    if include_external_gst_check:
+        # Run external GST verification only at final submission time.
+        inactive_gst, reason = check_gst_number_active(invoice_data.get("gst_number", ""))
+        if inactive_gst:
+            is_fraudulent = True
+            fraud_reasons.append(reason)
 
     # Check 6: Bill amount valid
     bad_amount, reason = check_bill_amount_valid(invoice_data.get("bill_amount", 0))

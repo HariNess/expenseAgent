@@ -14,6 +14,7 @@ from backend.agents.extraction_agent import (
 )
 from backend.agents.fraud_agent import run_fraud_detection, format_fraud_message
 from backend.agents.approval_agent import process_self_approval, get_expense_status_message
+from backend.services.gst_service import lookup_gst_status
 from backend.utils.helpers import (
     generate_expense_id, get_today_str,
     get_approval_level, get_initial_approval_status, format_currency
@@ -295,6 +296,33 @@ async def submit_expense(
     employee = db.query(Employee).filter(Employee.email == employee_email).first()
     if not employee:
         return {"message": "Employee not found. Please contact IT support."}
+
+    gst_number = (pending.get("gst_number") or "").strip().upper()
+    if gst_number:
+        try:
+            gst_lookup = lookup_gst_status(gst_number)
+        except Exception:
+            return {
+                "message": "I couldn't complete the GST verification step right now. Please try submitting again in a moment.",
+                "gst_verification": {
+                    "checked": False,
+                    "status": "Unavailable",
+                },
+            }
+
+        if not gst_lookup.get("found"):
+            return {
+                "message": f"I checked GST number **{gst_number}** during submission, but it could not be verified on the GST registry lookup. Please review the GST number before submitting.",
+                "gst_verification": gst_lookup,
+                "extracted_data": pending,
+            }
+
+        if not gst_lookup.get("is_active"):
+            return {
+                "message": f"I checked GST number **{gst_number}** during submission and found it is **{gst_lookup.get('status', 'inactive')}**. Please review the GST number before submitting.",
+                "gst_verification": gst_lookup,
+                "extracted_data": pending,
+            }
 
     # Generate expense ID
     expense_id = generate_expense_id()
