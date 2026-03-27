@@ -73,3 +73,8 @@ export const getAllExpenses = async () => {
   const { data } = await api.get('/approvals/all-expenses')
   return data
 }
+
+export const loginWithPassword = async (email, password) => {
+  const { data } = await api.post('/auth/login', { email, password })
+  return data
+}

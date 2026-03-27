@@ -3,7 +3,7 @@ import ChatWindow from './components/ChatWindow'
 import ApprovalPanel from './components/ApprovalPanel'
 import FeedbackToast from './components/FeedbackToast'
 import nessLogo from './assets/ness.png'
-import { getMyExpenses, getPendingApprovals } from './utils/api'
+import { getMyExpenses, getPendingApprovals, loginWithPassword } from './utils/api'
 
 const DEMO_USERS = [
   {
@@ -49,24 +49,26 @@ function getRoleDepartmentText(user) {
 const DEFAULT_USER = DEMO_USERS[0]
 const LOGIN_STORAGE_KEY = 'ness-expense-user'
 const NOTIFICATION_DISMISS_PREFIX = 'ness-expense-notice'
+const DEFAULT_LOGIN_PASSWORD = 'Ness@123'
 
 export default function App() {
   const [activeUser, setActiveUser] = useState(DEFAULT_USER)
   const [activeTab, setActiveTab] = useState('chat')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [selectedEmail, setSelectedEmail] = useState(DEFAULT_USER.email)
+  const [password, setPassword] = useState(DEFAULT_LOGIN_PASSWORD)
   const [loginNotification, setLoginNotification] = useState(null)
   const [navBadges, setNavBadges] = useState({})
   const [feedbackToasts, setFeedbackToasts] = useState([])
+  const [loginError, setLoginError] = useState('')
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
 
   useEffect(() => {
     const storedEmail = window.localStorage.getItem(LOGIN_STORAGE_KEY)
     const matchedUser = DEMO_USERS.find((user) => user.email === storedEmail)
 
     if (matchedUser) {
-      setActiveUser(matchedUser)
       setSelectedEmail(matchedUser.email)
-      setIsAuthenticated(true)
     }
   }, [])
 
@@ -148,15 +150,25 @@ export default function App() {
     }
   }, [isAuthenticated, activeUser])
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const matchedUser =
       DEMO_USERS.find((user) => user.email === selectedEmail) || DEFAULT_USER
 
-    setActiveUser(matchedUser)
-    setSelectedEmail(matchedUser.email)
-    setActiveTab('chat')
-    setIsAuthenticated(true)
-    window.localStorage.setItem(LOGIN_STORAGE_KEY, matchedUser.email)
+    setIsAuthenticating(true)
+    setLoginError('')
+
+    try {
+      await loginWithPassword(matchedUser.email, password)
+      setActiveUser(matchedUser)
+      setSelectedEmail(matchedUser.email)
+      setActiveTab('chat')
+      setIsAuthenticated(true)
+      window.localStorage.setItem(LOGIN_STORAGE_KEY, matchedUser.email)
+    } catch (error) {
+      setLoginError(error?.response?.data?.detail || 'Invalid email or password.')
+    } finally {
+      setIsAuthenticating(false)
+    }
   }
 
   const handleSwitchUser = (user) => {
@@ -201,7 +213,11 @@ export default function App() {
       <LoginScreen
         selectedEmail={selectedEmail}
         setSelectedEmail={setSelectedEmail}
+        password={password}
+        setPassword={setPassword}
         onLogin={handleLogin}
+        loginError={loginError}
+        isAuthenticating={isAuthenticating}
       />
     )
   }
@@ -588,7 +604,15 @@ export default function App() {
   )
 }
 
-function LoginScreen({ selectedEmail, setSelectedEmail, onLogin }) {
+function LoginScreen({
+  selectedEmail,
+  setSelectedEmail,
+  password,
+  setPassword,
+  onLogin,
+  loginError,
+  isAuthenticating,
+}) {
   const selectedUser =
     DEMO_USERS.find((user) => user.email === selectedEmail) || DEFAULT_USER
 
@@ -826,8 +850,62 @@ function LoginScreen({ selectedEmail, setSelectedEmail, onLogin }) {
             </div>
           </div>
 
+          <div
+            style={{
+              marginTop: 16,
+              padding: '18px',
+              borderRadius: 24,
+              background: 'rgba(255,255,255,0.82)',
+              border: '1px solid var(--border-soft)',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                marginBottom: 10,
+              }}
+            >
+              Password
+            </div>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !isAuthenticating) {
+                  onLogin()
+                }
+              }}
+              placeholder="Enter default password"
+              style={{
+                width: '100%',
+                borderRadius: 16,
+                border: '1px solid var(--border)',
+                background: 'var(--surface-raised)',
+                color: 'var(--text-primary)',
+                padding: '14px 16px',
+                fontSize: 14,
+                outline: 'none',
+                fontFamily: 'var(--font-body)',
+              }}
+            />
+            <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
+              Default password: <strong>{DEFAULT_LOGIN_PASSWORD}</strong>
+            </div>
+            {loginError && (
+              <div style={{ marginTop: 10, color: '#b04040', fontSize: 12, fontWeight: 600 }}>
+                {loginError}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={onLogin}
+            disabled={isAuthenticating}
             style={{
               marginTop: 'auto',
               width: '100%',
@@ -838,11 +916,12 @@ function LoginScreen({ selectedEmail, setSelectedEmail, onLogin }) {
               color: '#fff',
               fontWeight: 800,
               fontSize: 15,
-              cursor: 'pointer',
+              cursor: isAuthenticating ? 'not-allowed' : 'pointer',
+              opacity: isAuthenticating ? 0.7 : 1,
               boxShadow: '0 18px 36px rgba(3, 38, 71, 0.18)',
             }}
           >
-            Continue To Workspace
+            {isAuthenticating ? 'Signing In...' : 'Continue To Workspace'}
           </button>
         </section>
       </div>

@@ -2,6 +2,8 @@ from datetime import datetime, date
 from typing import List, Tuple
 import re
 
+from backend.services.gst_service import lookup_gst_status
+
 
 def check_duplicate_invoice(invoice_number: str, existing_invoices: list) -> Tuple[bool, str]:
     """Check if invoice number already exists"""
@@ -58,6 +60,26 @@ def check_gst_number_format(gst_number: str) -> Tuple[bool, str]:
     return False, ""
 
 
+def check_gst_number_active(gst_number: str) -> Tuple[bool, str]:
+    """Verify GST number exists and is active using the Razorpay GST search page."""
+    if not gst_number:
+        return False, ""
+
+    try:
+        result = lookup_gst_status(gst_number)
+    except Exception:
+        # Don't block the workflow if the external lookup is temporarily unavailable.
+        return False, ""
+
+    if not result.get("found"):
+        return True, result.get("reason") or f"GST number '{gst_number}' could not be verified."
+
+    if not result.get("is_active"):
+        return True, result.get("reason") or f"GST number '{gst_number}' is inactive."
+
+    return False, ""
+
+
 def check_bill_amount_valid(bill_amount: float) -> Tuple[bool, str]:
     """Check if bill amount is valid"""
     if bill_amount is None or bill_amount <= 0:
@@ -98,7 +120,19 @@ def run_all_fraud_checks(
         is_fraudulent = True
         fraud_reasons.append(reason)
 
-    # Check 4: Bill amount valid
+    # Check 4: GST format
+    bad_gst_format, reason = check_gst_number_format(invoice_data.get("gst_number", ""))
+    if bad_gst_format:
+        is_fraudulent = True
+        fraud_reasons.append(reason)
+
+    # Check 5: GST active status
+    inactive_gst, reason = check_gst_number_active(invoice_data.get("gst_number", ""))
+    if inactive_gst:
+        is_fraudulent = True
+        fraud_reasons.append(reason)
+
+    # Check 6: Bill amount valid
     bad_amount, reason = check_bill_amount_valid(invoice_data.get("bill_amount", 0))
     if bad_amount:
         is_fraudulent = True

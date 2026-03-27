@@ -92,3 +92,16 @@ class ChatResponse(BaseModel):
     action: Optional[str] = None
     data: Optional[dict] = None
     session_id: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    email: str
+    full_name: str
+    department: Optional[str] = None
+    role: str
+    default_password_hint: Optional[str] = None
