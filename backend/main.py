@@ -19,7 +19,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:8080").split(","),
+    allow_origins=["http://localhost:8080","https://8080-ffafdcfdafeaebcfabccbffcdeecac.premiumproject.examly.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

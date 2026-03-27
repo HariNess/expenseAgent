@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://8081-ffafdcfdafeaebcfabccbffcdeecac.premiumproject.examly.io/api',
   timeout: 60000,
 })
 
