@@ -14,7 +14,7 @@ from backend.agents.extraction_agent import (
 )
 from backend.agents.fraud_agent import run_fraud_detection, format_fraud_message
 from backend.agents.approval_agent import process_self_approval, get_expense_status_message
-from backend.services.gst_service import lookup_gst_status
+from backend.services.gst_service import resolve_gst_number
 from backend.utils.helpers import (
     generate_expense_id, get_today_str,
     get_approval_level, get_initial_approval_status, format_currency
@@ -300,7 +300,10 @@ async def submit_expense(
     gst_number = (pending.get("gst_number") or "").strip().upper()
     if gst_number:
         try:
-            gst_lookup = lookup_gst_status(gst_number)
+            gst_resolution = resolve_gst_number(gst_number)
+            gst_lookup = gst_resolution["lookup"]
+            gst_number = gst_resolution["gst_number"]
+            pending["gst_number"] = gst_number
         except Exception:
             return {
                 "message": "I couldn't complete the GST verification step right now. Please try submitting again in a moment.",
@@ -338,7 +341,7 @@ async def submit_expense(
         invoice_number=pending.get("invoice_number"),
         invoice_date=pending.get("invoice_date"),
         bill_amount=bill_amount,
-        gst_number=pending.get("gst_number"),
+        gst_number=gst_number or pending.get("gst_number"),
         gst_amount=pending.get("gst_amount"),
         expense_category=pending.get("expense_category"),
         submission_date=get_today_str(),
