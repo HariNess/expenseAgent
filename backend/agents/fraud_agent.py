@@ -72,7 +72,15 @@ def format_fraud_message(fraud_result: dict) -> str:
 
     reasons = fraud_result["reasons"]
     if len(reasons) == 1:
-        return f"⚠️ I found an issue with this document:\n\n• {reasons[0]}\n\nPlease fix this and reupload your document."
+        return (
+            f"I found one thing to fix before we can continue:\n\n"
+            f"• {reasons[0]}\n\n"
+            f"Please update the invoice and upload it again."
+        )
 
     reason_list = "\n".join([f"• {r}" for r in reasons])
-    return f"⚠️ I found {len(reasons)} issues with this document:\n\n{reason_list}\n\nPlease fix these and reupload your document."
+    return (
+        f"I found a few things to fix before we can continue:\n\n"
+        f"{reason_list}\n\n"
+        f"Please review them and upload the invoice again."
+    )

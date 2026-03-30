@@ -43,6 +43,8 @@ class Expense(Base):
     hr_email = Column(String)
     rejection_reason = Column(Text)
     fraud_flags = Column(Text)
+    jira_issue_key = Column(String)
+    jira_issue_url = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -65,6 +67,21 @@ class ApprovalLog(Base):
 def create_tables():
     os.makedirs("./database", exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    _ensure_expense_columns()
+
+
+def _ensure_expense_columns():
+    with engine.begin() as connection:
+        columns = {
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(expenses)").fetchall()
+        }
+
+        if "jira_issue_key" not in columns:
+            connection.exec_driver_sql("ALTER TABLE expenses ADD COLUMN jira_issue_key VARCHAR")
+
+        if "jira_issue_url" not in columns:
+            connection.exec_driver_sql("ALTER TABLE expenses ADD COLUMN jira_issue_url VARCHAR")
 
 
 def get_db():

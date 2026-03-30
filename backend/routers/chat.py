@@ -41,17 +41,17 @@ def _is_status_lookup(message: str) -> bool:
 def _build_status_chat_reply(expense: Expense) -> str:
     status_message = get_expense_status_message(expense)
     lines = [
-        f"Reference ID: {expense.expense_id}",
-        f"Status: {expense.approval_status}",
+        f"Here’s the latest update for **{expense.expense_id}**.",
+        f"Current status: **{expense.approval_status}**",
         status_message,
     ]
 
     if expense.approval_status == "Awaiting HR Approval":
-        lines.append("Your manager has already approved this expense. It is now waiting for HR review.")
+        lines.append("Your manager has already approved it, so the next step is HR review.")
     elif expense.approval_status == "Awaiting Manager Approval":
-        lines.append("This expense is currently waiting for manager review.")
+        lines.append("It’s currently with your manager for review.")
     elif expense.approval_status == "Fully Approved":
-        lines.append("This reimbursement has completed the approval workflow.")
+        lines.append("Everything is approved now.")
 
     return "\n\n".join(lines)
 
@@ -148,7 +148,7 @@ async def upload_invoice(
         if not extraction_is_meaningful(extracted):
             return {
                 "status": "error",
-                "message": "I couldn't reliably read the invoice details from that document. Please try a clearer image or a higher-quality PDF where the invoice number, date, vendor name, and total amount are visible.",
+                "message": "I couldn’t clearly read the invoice details from that file. Please try a clearer image or a higher-quality PDF where the invoice number, date, vendor name, and total amount are easy to see.",
                 "session_id": session_id
             }
 
@@ -208,27 +208,27 @@ async def upload_invoice(
         ):
             return {
                 "status": "error",
-                "message": "Invoice extraction is temporarily unavailable because the configured AI provider has run out of quota or billing access. Please add a valid API key with available usage and try again.",
+                "message": "I can’t read invoices right now because the AI service for extraction has run out of quota or billing access. Please update the API key or billing setup and try again.",
                 "session_id": session_id
             }
 
         if "Incorrect API key" in error_text or "invalid_api_key" in error_text.lower():
             return {
                 "status": "error",
-                "message": "Invoice extraction is temporarily unavailable because the configured API key is invalid. Please update the AI provider key in the backend environment and try again.",
+                "message": "I can’t read invoices right now because the AI API key looks invalid. Please update the backend key and try again.",
                 "session_id": session_id
             }
 
         if "pdfinfo" in error_text or "Poppler" in error_text:
             return {
                 "status": "error",
-                "message": "PDF processing is not available right now because the PDF renderer dependency is missing on the server. Please upload the invoice as an image for now, or install Poppler on the backend machine.",
+                "message": "I can’t open PDF invoices on this server right now because the PDF renderer is missing. For now, please upload the invoice as an image or install the PDF dependency on the backend machine.",
                 "session_id": session_id
             }
 
         return {
             "status": "error",
-            "message": f"I had trouble processing that document. Could you try uploading it again? Make sure it's a clear image or PDF.",
+            "message": "I had trouble reading that document. Please try uploading it again and make sure the file is a clear image or PDF.",
             "session_id": session_id
         }
 
@@ -249,12 +249,12 @@ async def edit_field(
     pending = session.get("pending_expense")
 
     if not pending:
-        return {"message": "No pending expense found. Please upload an invoice first."}
+        return {"message": "I don’t have an invoice ready to update yet. Please upload one first."}
 
     # Prevent editing bill_amount
     if field == "bill_amount":
         return {
-            "message": "The bill amount cannot be edited as it's extracted directly from your document. If the amount is wrong, please upload a clearer image of your invoice.",
+            "message": "The total amount is locked because it comes directly from the invoice. If it looks wrong, please upload a clearer copy of the document.",
             "extracted_data": pending
         }
 
@@ -265,7 +265,7 @@ async def edit_field(
 
         response = f"✅ Updated **{field.replace('_', ' ').title()}** to **{new_value}**.\n\nHere's the updated details:\n\n" + \
                    build_table_from_dict(pending) + \
-                   "\n\nAnything else to change, or shall I submit this?"
+                   "\n\nI’ve updated that for you. Would you like to change anything else, or should I submit it?"
 
         session["history"].append({"role": "assistant", "content": response})
         return {
@@ -273,7 +273,7 @@ async def edit_field(
             "extracted_data": pending
         }
 
-    return {"message": f"Field '{field}' not found."}
+    return {"message": f"I couldn’t find the field '{field}' in this invoice."}
 
 
 @router.post("/submit-expense")
@@ -290,12 +290,12 @@ async def submit_expense(
     pending = session.get("pending_expense")
 
     if not pending:
-        return {"message": "No pending expense to submit. Please upload an invoice first."}
+        return {"message": "I don’t have an invoice ready to submit yet. Please upload one first."}
 
     # Look up employee
     employee = db.query(Employee).filter(Employee.email == employee_email).first()
     if not employee:
-        return {"message": "Employee not found. Please contact IT support."}
+        return {"message": "I couldn’t match this account to an employee record. Please check with your admin or IT team."}
 
     gst_number = (pending.get("gst_number") or "").strip().upper()
     if gst_number:
@@ -306,7 +306,7 @@ async def submit_expense(
             pending["gst_number"] = gst_number
         except Exception:
             return {
-                "message": "I couldn't complete the GST verification step right now. Please try submitting again in a moment.",
+                "message": "I couldn’t verify the GST number right now. Please try submitting again in a moment.",
                 "gst_verification": {
                     "checked": False,
                     "status": "Unavailable",
@@ -315,14 +315,14 @@ async def submit_expense(
 
         if not gst_lookup.get("found"):
             return {
-                "message": f"I checked GST number **{gst_number}** during submission, but it could not be verified on the GST registry lookup. Please review the GST number before submitting.",
+                "message": f"I checked GST number **{gst_number}**, but I couldn’t verify it. Please review it once and then try submitting again.",
                 "gst_verification": gst_lookup,
                 "extracted_data": pending,
             }
 
         if not gst_lookup.get("is_active"):
             return {
-                "message": f"I checked GST number **{gst_number}** during submission and found it is **{gst_lookup.get('status', 'inactive')}**. Please review the GST number before submitting.",
+                "message": f"I checked GST number **{gst_number}** and it looks **{gst_lookup.get('status', 'inactive')}** right now. Please review it before submitting.",
                 "gst_verification": gst_lookup,
                 "extracted_data": pending,
             }
@@ -357,17 +357,7 @@ async def submit_expense(
     # Handle self-approval
     if approval_level == "Self":
         approval_result = process_self_approval(db, expense)
-        response = get_orchestrator_response(
-            user_message="Expense submitted",
-            conversation_history=session["history"],
-            context={
-                "type": "expense_submitted",
-                "expense_id": expense_id,
-                "status": "Self-Approved",
-                "amount": format_currency(bill_amount),
-                "approval_level": "self"
-            }
-        )
+        response = approval_result["message"]
     else:
         response = get_orchestrator_response(
             user_message="Expense submitted",
@@ -399,7 +389,7 @@ async def get_expense_status(expense_id: str, db: Session = Depends(get_db)):
     """Get expense status"""
     expense = db.query(Expense).filter(Expense.expense_id == expense_id).first()
     if not expense:
-        return {"message": f"No expense found with ID {expense_id}"}
+        return {"message": f"I couldn’t find any expense with reference ID {expense_id}."}
 
     status_message = get_expense_status_message(expense)
     return {
