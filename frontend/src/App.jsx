@@ -151,31 +151,32 @@ export default function App() {
   }, [isAuthenticated, activeUser])
 
   const handleLogin = async () => {
-    const matchedUser =
-      DEMO_USERS.find((user) => user.email === selectedEmail) || DEFAULT_USER
-
     setIsAuthenticating(true)
     setLoginError('')
 
     try {
-      await loginWithPassword(matchedUser.email, password)
-      setActiveUser(matchedUser)
-      setSelectedEmail(matchedUser.email)
+      const loggedInUser = await loginWithPassword(selectedEmail, password)
+      setActiveUser({
+        email: loggedInUser.email,
+        name: loggedInUser.full_name,
+        role: loggedInUser.role,
+        avatar: loggedInUser.full_name
+          .split(' ')
+          .map((part) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase(),
+        department: loggedInUser.department || '',
+      })
+      setSelectedEmail(loggedInUser.email)
       setActiveTab('chat')
       setIsAuthenticated(true)
-      window.localStorage.setItem(LOGIN_STORAGE_KEY, matchedUser.email)
+      window.localStorage.setItem(LOGIN_STORAGE_KEY, loggedInUser.email)
     } catch (error) {
       setLoginError(error?.response?.data?.detail || 'Invalid email or password.')
     } finally {
       setIsAuthenticating(false)
     }
-  }
-
-  const handleSwitchUser = (user) => {
-    setActiveUser(user)
-    setSelectedEmail(user.email)
-    setActiveTab('chat')
-    window.localStorage.setItem(LOGIN_STORAGE_KEY, user.email)
   }
 
   const handleLogout = () => {
@@ -355,95 +356,6 @@ export default function App() {
 
           <StatusPanel />
 
-          <div
-            style={{
-              marginTop: 'auto',
-              display: 'grid',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  color: 'var(--text-secondary)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  marginBottom: 10,
-                }}
-              >
-                Active Profiles
-              </div>
-              <div style={{ display: 'grid', gap: 10 }}>
-                {DEMO_USERS.map((user) => {
-                  const isActive = activeUser.email === user.email
-
-                  return (
-                    <button
-                      key={user.email}
-                      onClick={() => handleSwitchUser(user)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        width: '100%',
-                        padding: '13px 14px',
-                        borderRadius: 20,
-                        border: '1px solid',
-                        borderColor: isActive ? 'var(--border-strong)' : 'var(--border-soft)',
-                        background: isActive ? 'var(--surface-raised)' : 'rgba(255,255,255,0.62)',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        transition: 'all 0.18s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 14,
-                          display: 'grid',
-                          placeItems: 'center',
-                          fontFamily: 'var(--font-display)',
-                          fontWeight: 700,
-                          fontSize: 13,
-                          background: isActive ? 'var(--accent)' : 'var(--surface-muted)',
-                          color: isActive ? '#fff' : 'var(--text-primary)',
-                        }}
-                      >
-                        {user.avatar}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: 'var(--text-primary)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {user.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: 'var(--text-secondary)',
-                            marginTop: 2,
-                          }}
-                        >
-                          {getRoleDepartmentText(user)}
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
         </aside>
 
         <main
@@ -613,9 +525,6 @@ function LoginScreen({
   loginError,
   isAuthenticating,
 }) {
-  const selectedUser =
-    DEMO_USERS.find((user) => user.email === selectedEmail) || DEFAULT_USER
-
   return (
     <div
       style={{
@@ -727,7 +636,7 @@ function LoginScreen({
                 color: 'var(--text-primary)',
               }}
             >
-              Select a Ness profile
+              Sign in to NessExpense
             </div>
             <div
               style={{
@@ -736,87 +645,16 @@ function LoginScreen({
                 color: 'var(--text-secondary)',
               }}
             >
-              Pick the user you want to enter with, then continue into the workspace.
+              Use your demo username and password to enter the workspace.
             </div>
-          </div>
-
-          <div style={{ marginTop: 28, display: 'grid', gap: 12 }}>
-            {DEMO_USERS.map((user) => {
-              const isSelected = selectedEmail === user.email
-
-              return (
-                <button
-                  key={user.email}
-                  onClick={() => setSelectedEmail(user.email)}
-                  style={{
-                    width: '100%',
-                    border: '1px solid',
-                    borderColor: isSelected ? 'var(--border-strong)' : 'var(--border-soft)',
-                    background: isSelected ? 'rgba(15, 143, 134, 0.08)' : 'var(--surface-raised)',
-                    borderRadius: 24,
-                    padding: '16px 18px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 14,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.18s ease',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 18,
-                    background: isSelected ? 'var(--accent)' : 'var(--surface-muted)',
-                      color: isSelected ? '#fff' : 'var(--text-primary)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontWeight: 800,
-                    }}
-                  >
-                    {user.avatar}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        fontSize: 15,
-                      }}
-                    >
-                      {user.name}
-                    </div>
-                    <div
-                      style={{
-                        marginTop: 4,
-                        color: 'var(--text-secondary)',
-                        fontSize: 13,
-                      }}
-                    >
-                      {user.email}
-                    </div>
-                    <div
-                      style={{
-                        marginTop: 6,
-                        color: 'var(--text-muted)',
-                        fontSize: 12,
-                      }}
-                    >
-                      {getRoleDepartmentText(user)}
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
           </div>
 
           <div
             style={{
-              marginTop: 22,
-              padding: '18px 18px 20px',
+              marginTop: 28,
+              padding: '18px',
               borderRadius: 24,
-              background: 'var(--bg-input)',
+              background: 'rgba(255,255,255,0.82)',
               border: '1px solid var(--border-soft)',
             }}
           >
@@ -827,27 +665,33 @@ function LoginScreen({
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
+                marginBottom: 10,
               }}
             >
-              Selected Profile
+              Username
             </div>
-            <div
+            <input
+              type="email"
+              value={selectedEmail}
+              onChange={(event) => setSelectedEmail(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !isAuthenticating) {
+                  onLogin()
+                }
+              }}
+              placeholder="Enter email address"
               style={{
-                marginTop: 10,
-                fontFamily: 'var(--font-display)',
-                fontWeight: 800,
-                fontSize: 20,
+                width: '100%',
+                borderRadius: 16,
+                border: '1px solid var(--border)',
+                background: 'var(--surface-raised)',
                 color: 'var(--text-primary)',
+                padding: '14px 16px',
+                fontSize: 14,
+                outline: 'none',
+                fontFamily: 'var(--font-body)',
               }}
-            >
-              {selectedUser.name}
-            </div>
-            <div style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 14 }}>
-              {selectedUser.email}
-            </div>
-            <div style={{ marginTop: 6, color: 'var(--text-muted)', fontSize: 13 }}>
-              {getRoleDepartmentText(selectedUser)}
-            </div>
+            />
           </div>
 
           <div
