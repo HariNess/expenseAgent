@@ -4,6 +4,8 @@ import re
 
 from backend.services.gst_service import lookup_gst_status
 
+MAX_INVOICE_AGE_DAYS = 30
+
 
 def check_duplicate_invoice(invoice_number: str, existing_invoices: list) -> Tuple[bool, str]:
     """Check if invoice number already exists"""
@@ -16,7 +18,7 @@ def check_duplicate_invoice(invoice_number: str, existing_invoices: list) -> Tup
 
 
 def check_invoice_age(invoice_date_str: str) -> Tuple[bool, str]:
-    """Check if invoice is older than 15 days"""
+    """Check if invoice is older than the allowed age window."""
     if not invoice_date_str:
         return True, "Invoice date is missing. Cannot validate age."
     try:
@@ -33,8 +35,8 @@ def check_invoice_age(invoice_date_str: str) -> Tuple[bool, str]:
         today = date.today()
         delta = (today - invoice_date).days
 
-        if delta > 15:
-            return True, f"Invoice dated {invoice_date_str} is {delta} days old. Only invoices within 15 days are accepted."
+        if delta > MAX_INVOICE_AGE_DAYS:
+            return True, f"Invoice dated {invoice_date_str} is {delta} days old. Only invoices within {MAX_INVOICE_AGE_DAYS} days are accepted."
         if delta < 0:
             return True, f"Invoice date {invoice_date_str} is in the future. Please check the date."
         return False, ""
@@ -109,7 +111,7 @@ def run_all_fraud_checks(
         is_fraudulent = True
         fraud_reasons.append(reason)
 
-    # Check 2: Invoice older than 15 days
+    # Check 2: Invoice older than the allowed age window
     old, reason = check_invoice_age(invoice_data.get("invoice_date", ""))
     if old:
         is_fraudulent = True

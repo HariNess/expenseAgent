@@ -2,6 +2,8 @@ from datetime import datetime
 import uuid
 import re
 
+SELF_APPROVAL_LIMIT = 200.0
+
 
 def generate_expense_id() -> str:
     """Generate unique expense ID: EXP-20260324-a3f9c1"""
@@ -83,4 +85,3 @@ def detect_media_type(filename: str) -> str:
         "pdf": "application/pdf",
     }
     return mapping.get(ext, "image/jpeg")
-SELF_APPROVAL_LIMIT = 100.0
