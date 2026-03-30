@@ -6,6 +6,7 @@ import io
 from PIL import Image, ImageEnhance, ImageOps
 from backend.services.claude_service import extract_invoice_with_vision
 from backend.services.fx_service import get_usd_to_inr_rate
+from backend.services.gst_service import resolve_gst_number
 from backend.utils.helpers import detect_media_type
 
 
@@ -195,6 +196,13 @@ def validate_extracted_data(extracted: dict) -> dict:
             cleaned["bill_amount"] = round(cleaned["original_bill_amount"] * fx["rate"], 2)
         except Exception:
             # If FX lookup fails, preserve the original amount so the user can still review it.
+            pass
+
+    if cleaned["gst_number"]:
+        try:
+            gst_resolution = resolve_gst_number(cleaned["gst_number"])
+            cleaned["gst_number"] = gst_resolution["gst_number"]
+        except Exception:
             pass
 
     return cleaned
