@@ -151,11 +151,14 @@ export default function App() {
   }, [isAuthenticated, activeUser])
 
   const handleLogin = async () => {
+    const normalizedEmail = selectedEmail.trim().toLowerCase()
+    const normalizedPassword = password.trim()
+
     setIsAuthenticating(true)
     setLoginError('')
 
     try {
-      const loggedInUser = await loginWithPassword(selectedEmail, password)
+      const loggedInUser = await loginWithPassword(normalizedEmail, normalizedPassword)
       setActiveUser({
         email: loggedInUser.email,
         name: loggedInUser.full_name,
@@ -169,6 +172,7 @@ export default function App() {
         department: loggedInUser.department || '',
       })
       setSelectedEmail(loggedInUser.email)
+      setPassword(DEFAULT_LOGIN_PASSWORD)
       setActiveTab('chat')
       setIsAuthenticated(true)
       window.localStorage.setItem(LOGIN_STORAGE_KEY, loggedInUser.email)
@@ -673,7 +677,10 @@ function LoginScreen({
             <input
               type="email"
               value={selectedEmail}
-              onChange={(event) => setSelectedEmail(event.target.value)}
+              onChange={(event) => {
+                setSelectedEmail(event.target.value)
+                if (loginError) setLoginError('')
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !isAuthenticating) {
                   onLogin()
@@ -718,7 +725,10 @@ function LoginScreen({
             <input
               type="password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                if (loginError) setLoginError('')
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !isAuthenticating) {
                   onLogin()

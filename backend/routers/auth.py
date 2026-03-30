@@ -14,11 +14,14 @@ DEFAULT_PASSWORD = os.getenv("DEMO_LOGIN_PASSWORD", "Ness@123")
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
-    employee = db.query(Employee).filter(Employee.email == request.email).first()
+    normalized_email = (request.email or "").strip().lower()
+    normalized_password = (request.password or "").strip()
+
+    employee = db.query(Employee).filter(Employee.email == normalized_email).first()
     if not employee:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if (request.password or "") != DEFAULT_PASSWORD:
+    if normalized_password != DEFAULT_PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     role = "employee"
