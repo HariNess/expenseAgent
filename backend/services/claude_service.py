@@ -14,6 +14,7 @@ INVOICE_SCHEMA = {
         "invoice_number": {"type": "string"},
         "invoice_date": {"type": "string"},
         "bill_amount": {"type": "number"},
+        "bill_currency": {"type": "string"},
         "gst_number": {"type": "string"},
         "gst_amount": {"type": "number"},
         "expense_category": {"type": "string"},
@@ -23,6 +24,7 @@ INVOICE_SCHEMA = {
         "invoice_number",
         "invoice_date",
         "bill_amount",
+        "bill_currency",
         "gst_number",
         "gst_amount",
         "expense_category",
@@ -68,8 +70,9 @@ def extract_invoice_with_vision(
 Extract these fields from the invoice image:
 - vendor_name: Name of the vendor or supplier
 - invoice_number: Invoice ID or bill number
-- invoice_date: Date on the invoice in YYYY-MM-DD format when possible
-- bill_amount: Total bill amount as a number without currency symbols
+- invoice_date: Invoice issue date or bill/statement date in YYYY-MM-DD format when possible
+- bill_amount: Total bill amount as a number without currency symbols in the ORIGINAL invoice currency
+- bill_currency: ISO currency code like INR, USD, EUR. Infer from symbol or printed code. Default to INR only when the document clearly appears to be in rupees
 - gst_number: GST registration number of the vendor if present, else empty string
 - gst_amount: GST or tax amount as a number if present, else 0
 - expense_category: Best match from:
@@ -80,6 +83,8 @@ Extract these fields from the invoice image:
 Important:
 - Read the document carefully before leaving fields blank.
 - Prioritize the printed invoice total, invoice number, vendor name, invoice date, and GST details.
+- For internet, broadband, telecom, and Wi-Fi bills, use the bill date, statement date, invoice date, or billing period end date.
+- Never use installation date, activation date, connection start date, onboarding date, or service start date as invoice_date.
 - If the image is a photographed bill, infer the most likely vendor name from the header.
 - Return empty strings or 0 only when the field is truly not visible.
 

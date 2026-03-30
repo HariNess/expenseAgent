@@ -38,11 +38,28 @@ def get_initial_approval_status(bill_amount: float) -> str:
 
 def build_expense_table_markdown(extracted: dict) -> str:
     """Build a markdown table from extracted invoice data"""
+    original_amount = extracted.get("original_bill_amount", "—")
+    if extracted.get("bill_currency") == "USD" and original_amount not in (None, "", "—"):
+        try:
+            original_amount = f"${float(original_amount):,.2f}"
+        except (TypeError, ValueError):
+            pass
+
+    fx_rate = extracted.get("exchange_rate", "—")
+    if fx_rate not in (None, "", "—"):
+        try:
+            fx_rate = f"1 USD = ₹{float(fx_rate):,.2f}"
+        except (TypeError, ValueError):
+            pass
+
     rows = [
         ("Vendor Name", extracted.get("vendor_name", "—")),
         ("Invoice Number", extracted.get("invoice_number", "—")),
         ("Invoice Date", extracted.get("invoice_date", "—")),
         ("Bill Amount", format_currency(extracted.get("bill_amount", 0))),
+        ("Original Currency", extracted.get("bill_currency", "INR")),
+        ("Original Amount", original_amount),
+        ("FX Rate", fx_rate),
         ("GST Number", extracted.get("gst_number", "—")),
         ("GST Amount", format_currency(extracted.get("gst_amount", 0))),
         ("Category", extracted.get("expense_category", "—")),

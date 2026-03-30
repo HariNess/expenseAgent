@@ -27,6 +27,10 @@ const FIELD_LABELS = {
   invoice_number: 'Invoice Number',
   invoice_date: 'Invoice Date',
   bill_amount: 'Bill Amount',
+  bill_currency: 'Original Currency',
+  original_bill_amount: 'Original Amount',
+  exchange_rate: 'USD to INR Rate',
+  exchange_rate_date: 'FX Rate Date',
   gst_number: 'GST Number',
   gst_amount: 'GST Amount',
   expense_category: 'Category',
@@ -51,12 +55,27 @@ export default function ExpenseTable({ data, onUpdate, onSubmit, onCancel }) {
   }
 
   const formatValue = (field, value) => {
-    if (field === 'bill_amount' || field === 'gst_amount') {
+    if (field === 'bill_amount' || field === 'gst_amount' || field === 'original_bill_amount') {
       const num = parseFloat(value)
-      return isNaN(num) ? value : `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      if (isNaN(num)) return value
+      if (field === 'original_bill_amount' && localData.bill_currency === 'USD') {
+        return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+      }
+      return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+    }
+    if (field === 'exchange_rate') {
+      const num = parseFloat(value)
+      return isNaN(num) ? '—' : `1 USD = ₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     }
     return value || '—'
   }
+
+  const visibleFields = Object.entries(FIELD_LABELS).filter(([field]) => {
+    if (field === 'original_bill_amount') return localData.bill_currency === 'USD' && localData.original_bill_amount
+    if (field === 'exchange_rate' || field === 'exchange_rate_date') return localData.bill_currency === 'USD' && localData.exchange_rate
+    if (field === 'bill_currency') return !!localData.bill_currency && localData.bill_currency !== 'INR'
+    return true
+  })
 
   return (
     <div style={{
@@ -97,7 +116,7 @@ export default function ExpenseTable({ data, onUpdate, onSubmit, onCancel }) {
 
       {/* Table rows */}
       <div>
-        {Object.entries(FIELD_LABELS).map(([field, label]) => {
+        {visibleFields.map(([field, label]) => {
           const isEditable = EDITABLE_FIELDS.includes(field)
           const isEditingThis = editing === field
           const value = localData[field]

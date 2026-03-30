@@ -5,6 +5,7 @@ Responsible for extracting structured data from invoice images using Claude Visi
 import io
 from PIL import Image, ImageEnhance, ImageOps
 from backend.services.claude_service import extract_invoice_with_vision
+from backend.services.fx_service import get_usd_to_inr_rate
 from backend.utils.helpers import detect_media_type
 
 
@@ -166,6 +167,11 @@ def validate_extracted_data(extracted: dict) -> dict:
         val = extracted.get(field, "")
         cleaned[field] = str(val).strip() if val else ""
 
+    bill_currency = str(extracted.get("bill_currency", "") or "INR").strip().upper()
+    if bill_currency == "$":
+        bill_currency = "USD"
+    cleaned["bill_currency"] = bill_currency or "INR"
+
     # Numeric fields
     for field in ["bill_amount", "gst_amount"]:
         val = extracted.get(field, 0)
@@ -176,5 +182,19 @@ def validate_extracted_data(extracted: dict) -> dict:
             cleaned[field] = float(val) if val else 0.0
         except (ValueError, TypeError):
             cleaned[field] = 0.0
+
+    cleaned["original_bill_amount"] = cleaned["bill_amount"]
+    cleaned["exchange_rate"] = None
+    cleaned["exchange_rate_date"] = None
+
+    if cleaned["bill_currency"] == "USD" and cleaned["bill_amount"] > 0:
+        try:
+            fx = get_usd_to_inr_rate()
+            cleaned["exchange_rate"] = fx["rate"]
+            cleaned["exchange_rate_date"] = fx["date"]
+            cleaned["bill_amount"] = round(cleaned["original_bill_amount"] * fx["rate"], 2)
+        except Exception:
+            # If FX lookup fails, preserve the original amount so the user can still review it.
+            pass
 
     return cleaned

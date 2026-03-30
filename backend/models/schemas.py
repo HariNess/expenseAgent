@@ -19,6 +19,10 @@ class ExtractedInvoice(BaseModel):
     invoice_number: Optional[str] = None
     invoice_date: Optional[str] = None
     bill_amount: Optional[float] = None
+    bill_currency: Optional[str] = None
+    original_bill_amount: Optional[float] = None
+    exchange_rate: Optional[float] = None
+    exchange_rate_date: Optional[str] = None
     gst_number: Optional[str] = None
     gst_amount: Optional[float] = None
     expense_category: Optional[str] = None
