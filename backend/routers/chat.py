@@ -54,6 +54,30 @@ def _build_submission_progress_message(
     return "\n\n".join(lines)
 
 
+def _submission_steps(
+    gst_number: str = "",
+    gst_valid: bool | None = None,
+    creating: bool = False,
+    created: bool = False,
+) -> list[str]:
+    steps = []
+
+    if gst_number:
+        steps.append(f"Checking GST number **{gst_number}**.")
+        if gst_valid is True:
+            steps.append("GST number is valid and active.")
+        elif gst_valid is False:
+            steps.append("I couldn’t confirm that GST number as valid, so I’m stopping here for now.")
+
+    if creating:
+        steps.append("Creating the expense for you now.")
+
+    if created:
+        steps.append("Done. Your expense has been created.")
+
+    return steps
+
+
 def _extract_expense_id(text: str) -> Optional[str]:
     match = EXPENSE_ID_PATTERN.search(text or "")
     return match.group(0) if match else None
@@ -333,6 +357,7 @@ async def submit_expense(
         except Exception:
             return {
                 "message": "I couldn’t verify the GST number right now. Please try submitting again in a moment.",
+                "messages": _submission_steps(gst_number=gst_number, gst_valid=False),
                 "gst_verification": {
                     "checked": False,
                     "status": "Unavailable",
@@ -342,6 +367,7 @@ async def submit_expense(
         if not gst_lookup.get("found"):
             return {
                 "message": f"I checked GST number **{gst_number}**, but I couldn’t verify it. Please review it once and then try submitting again.",
+                "messages": _submission_steps(gst_number=gst_number, gst_valid=False),
                 "gst_verification": gst_lookup,
                 "extracted_data": pending,
             }
@@ -349,6 +375,7 @@ async def submit_expense(
         if not gst_lookup.get("is_active"):
             return {
                 "message": f"I checked GST number **{gst_number}** and it looks **{gst_lookup.get('status', 'inactive')}** right now. Please review it before submitting.",
+                "messages": _submission_steps(gst_number=gst_number, gst_valid=False),
                 "gst_verification": gst_lookup,
                 "extracted_data": pending,
             }
@@ -414,6 +441,15 @@ async def submit_expense(
 
     return {
         "message": response,
+        "messages": [
+            *_submission_steps(
+                gst_number=gst_number,
+                gst_valid=bool(gst_number),
+                creating=True,
+                created=True,
+            ),
+            response,
+        ],
         "expense_id": expense_id,
         "approval_status": expense.approval_status,
         "approval_level": approval_level

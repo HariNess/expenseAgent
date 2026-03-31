@@ -95,7 +95,11 @@ export default function ChatWindow({ employeeEmail, onActionFeedback }) {
     setPendingExpense(null)
     try {
       const data = await submitExpense(employeeEmail, sessionId)
-      addMessage('assistant', data.message)
+      const assistantMessages = Array.isArray(data.messages) && data.messages.length
+        ? data.messages
+        : [data.message]
+
+      assistantMessages.forEach(message => addMessage('assistant', message))
       onActionFeedback?.(`Expense ${data.expense_id} submitted successfully.`, 'success')
     } catch (e) {
       addMessage('assistant', "There was an issue submitting your expense. Please try again.")
