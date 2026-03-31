@@ -176,21 +176,28 @@ def _sync_jira_task(db: Session, expense: Expense) -> dict:
 
 def _append_jira_message(message: str, jira_result: dict) -> str:
     if jira_result.get("created") and jira_result.get("issue_key"):
+        extra_line = ""
+        if jira_result.get("issue_url"):
+            extra_line = f"\nJira link: {jira_result['issue_url']}"
         return (
             f"{message}\n\n"
-            f"I’ve also created a Jira task for this approval: **{jira_result['issue_key']}**."
+            f"I’ve also created a Jira task for this approval: **{jira_result['issue_key']}**.{extra_line}"
         )
 
     if jira_result.get("existing") and jira_result.get("issue_key"):
+        extra_line = ""
+        if jira_result.get("issue_url"):
+            extra_line = f"\nJira link: {jira_result['issue_url']}"
         return (
             f"{message}\n\n"
-            f"This approval is already linked to Jira task **{jira_result['issue_key']}**."
+            f"This approval is already linked to Jira task **{jira_result['issue_key']}**.{extra_line}"
         )
 
     if jira_result.get("error"):
         return (
             f"{message}\n\n"
-            f"The approval is saved, but I couldn’t create the Jira task just now."
+            f"The approval is saved, but I couldn’t create the Jira task just now.\n"
+            f"Reason: {jira_result['error']}"
         )
 
     return message

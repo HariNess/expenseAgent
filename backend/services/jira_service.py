@@ -61,13 +61,17 @@ def create_jira_task_for_expense(expense) -> Dict[str, Any]:
     )
 
     if response.status_code not in (200, 201):
-        raise RuntimeError(f"Jira issue creation failed with status {response.status_code}: {response.text}")
+        _raise_jira_error(response)
 
     data = response.json()
     issue_key = data.get("key")
+    if not issue_key:
+        raise RuntimeError("Jira did not return an issue key after creating the task.")
     return {
         "created": True,
         "existing": False,
+        "project_key": os.getenv("JIRA_PROJECT_KEY"),
+        "issue_type": issue_type,
         "issue_key": issue_key,
         "issue_url": _build_issue_url(issue_key),
     }
@@ -122,3 +126,38 @@ def _build_description(expense) -> Dict[str, Any]:
             },
         ],
     }
+
+
+def _raise_jira_error(response: requests.Response) -> None:
+    body = {}
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+
+    error_messages = body.get("errorMessages") or []
+    first_error = error_messages[0] if error_messages else response.text
+    lowered_error = first_error.lower()
+
+    if response.status_code == 401:
+        if "permission" in lowered_error:
+            raise RuntimeError(
+                "Jira rejected the request for this project. Check JIRA_PROJECT_KEY and confirm this account can create issues there."
+            )
+        raise RuntimeError(
+            "Jira authentication failed. Check JIRA_EMAIL and JIRA_API_TOKEN."
+        )
+
+    if response.status_code == 403:
+        raise RuntimeError(
+            "Jira denied access to create issues in this project. Make sure this account has Create issues permission."
+        )
+
+    if response.status_code == 404:
+        raise RuntimeError(
+            "Jira could not find the configured project. Check JIRA_PROJECT_KEY and JIRA_BASE_URL."
+        )
+
+    raise RuntimeError(
+        f"Jira issue creation failed with status {response.status_code}: {first_error}"
+    )

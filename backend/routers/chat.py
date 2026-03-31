@@ -400,7 +400,11 @@ async def get_expense_status(expense_id: str, db: Session = Depends(get_db)):
             "vendor": expense.vendor_name,
             "amount": format_currency(expense.bill_amount),
             "submitted": expense.submission_date
-        }
+        },
+        "jira": {
+            "issue_key": expense.jira_issue_key,
+            "issue_url": expense.jira_issue_url,
+        },
     }
 
 
@@ -418,7 +422,9 @@ async def get_my_expenses(employee_email: str, db: Session = Depends(get_db)):
                 "vendor_name": e.vendor_name,
                 "bill_amount": format_currency(e.bill_amount),
                 "status": e.approval_status,
-                "submitted": e.submission_date
+                "submitted": e.submission_date,
+                "jira_issue_key": e.jira_issue_key,
+                "jira_issue_url": e.jira_issue_url,
             }
             for e in expenses
         ]

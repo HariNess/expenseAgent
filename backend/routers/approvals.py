@@ -31,7 +31,9 @@ async def get_pending(approver_email: str, stage: str = "manager", db: Session =
                 "expense_category": e.expense_category,
                 "gst_number": e.gst_number,
                 "submission_date": e.submission_date,
-                "status": e.approval_status
+                "status": e.approval_status,
+                "jira_issue_key": e.jira_issue_key,
+                "jira_issue_url": e.jira_issue_url,
             }
             for e in expenses
         ]
@@ -135,7 +137,9 @@ async def get_all_expenses(db: Session = Depends(get_db)):
                 "bill_amount": format_currency(e.bill_amount),
                 "status": e.approval_status,
                 "category": e.expense_category,
-                "submitted": e.submission_date
+                "submitted": e.submission_date,
+                "jira_issue_key": e.jira_issue_key,
+                "jira_issue_url": e.jira_issue_url,
             }
             for e in expenses
         ]
