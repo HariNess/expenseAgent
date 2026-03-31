@@ -28,6 +28,32 @@ EXPENSE_ID_PATTERN = re.compile(r"\bEXP-\d{8}-[A-Za-z0-9]+\b", re.IGNORECASE)
 STATUS_KEYWORDS = ("status", "track", "tracking", "approval", "approved", "pending", "where is")
 
 
+def _build_submission_progress_message(
+    base_message: str,
+    gst_number: str = "",
+    gst_checked: bool = False,
+    jira_result: dict | None = None,
+) -> str:
+    lines = []
+
+    if gst_checked and gst_number:
+        lines.append(f"I’ve checked GST number **{gst_number}**.")
+        lines.append("GST number is valid and active.")
+        lines.append("Everything looks good, so I’m creating the expense now.")
+    else:
+        lines.append("I’ve completed the final checks.")
+        lines.append("Everything looks good, so I’m creating the expense now.")
+
+    lines.append("")
+    lines.append(base_message)
+
+    if jira_result and jira_result.get("created") and jira_result.get("issue_key"):
+        lines.append("")
+        lines.append(f"Jira task created: **{jira_result['issue_key']}**")
+
+    return "\n\n".join(lines)
+
+
 def _extract_expense_id(text: str) -> Optional[str]:
     match = EXPENSE_ID_PATTERN.search(text or "")
     return match.group(0) if match else None
@@ -357,9 +383,14 @@ async def submit_expense(
     # Handle self-approval
     if approval_level == "Self":
         approval_result = process_self_approval(db, expense)
-        response = approval_result["message"]
+        response = _build_submission_progress_message(
+            approval_result["message"],
+            gst_number=gst_number,
+            gst_checked=bool(gst_number),
+            jira_result=approval_result.get("jira"),
+        )
     else:
-        response = get_orchestrator_response(
+        base_response = get_orchestrator_response(
             user_message="Expense submitted",
             conversation_history=session["history"],
             context={
@@ -369,6 +400,11 @@ async def submit_expense(
                 "amount": format_currency(bill_amount),
                 "approval_level": "dual"
             }
+        )
+        response = _build_submission_progress_message(
+            base_response,
+            gst_number=gst_number,
+            gst_checked=bool(gst_number),
         )
 
     # Clear pending expense

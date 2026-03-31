@@ -2,6 +2,7 @@ import os
 from typing import Any, Dict
 
 import requests
+from backend.utils.helpers import format_currency
 
 
 JIRA_TIMEOUT = float(os.getenv("JIRA_TIMEOUT", "12"))
@@ -43,7 +44,7 @@ def create_jira_task_for_expense(expense) -> Dict[str, Any]:
     payload = {
         "fields": {
             "project": {"key": os.getenv("JIRA_PROJECT_KEY")},
-            "summary": f"Approved expense: {expense.expense_id} - {expense.vendor_name or 'Vendor not available'}",
+            "summary": _build_summary(expense),
             "issuetype": {"name": issue_type},
             "description": _build_description(expense),
         }
@@ -87,16 +88,25 @@ def _build_issue_url(issue_key: str | None) -> str | None:
 
 
 def _build_description(expense) -> Dict[str, Any]:
+    amount = format_currency(expense.bill_amount)
+    employee = getattr(expense, "employee_email", None) or "Not available"
+    category = getattr(expense, "expense_category", None) or "Not available"
+    vendor = getattr(expense, "vendor_name", None) or "Not available"
+
     lines = [
+        f"Approved for: {employee}",
+        f"Amount approved: {amount}",
+        f"Category: {category}",
+        f"Vendor: {vendor}",
         f"Expense ID: {expense.expense_id}",
-        f"Employee: {expense.employee_email}",
-        f"Vendor: {expense.vendor_name or 'Not available'}",
+        f"Employee: {employee}",
+        f"Vendor: {vendor}",
         f"Invoice Number: {expense.invoice_number or 'Not available'}",
         f"Invoice Date: {expense.invoice_date or 'Not available'}",
-        f"Bill Amount: {expense.bill_amount if expense.bill_amount is not None else 'Not available'}",
+        f"Bill Amount: {amount if expense.bill_amount is not None else 'Not available'}",
         f"GST Number: {expense.gst_number or 'Not available'}",
-        f"GST Amount: {expense.gst_amount if expense.gst_amount is not None else 'Not available'}",
-        f"Category: {expense.expense_category or 'Not available'}",
+        f"GST Amount: {format_currency(expense.gst_amount) if expense.gst_amount is not None else 'Not available'}",
+        f"Category: {category}",
         f"Approval Status: {expense.approval_status}",
         f"Submitted On: {expense.submission_date or 'Not available'}",
     ]
@@ -126,6 +136,13 @@ def _build_description(expense) -> Dict[str, Any]:
             },
         ],
     }
+
+
+def _build_summary(expense) -> str:
+    employee = getattr(expense, "employee_email", None) or "Unknown employee"
+    category = getattr(expense, "expense_category", None) or "General"
+    amount = format_currency(expense.bill_amount)
+    return f"Approved expense for {employee} | {amount} | {category}"
 
 
 def _raise_jira_error(response: requests.Response) -> None:
